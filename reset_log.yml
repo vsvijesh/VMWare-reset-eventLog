@@ -1,0 +1,33 @@
+---
+- name: Reset logs
+  hosts: win
+  gather_facts: false
+  vars_files:
+    - vc_vars.yml
+  tasks:
+    - name: Connect to vcenter and reset logs
+      ansible.windows.win_shell: |
+        Import-Module VMware.PowerCLI
+        Set-PowerCLIConfiguration -InvalidCertificateAction Ignore -Confirm:$false
+        $ErrorActionPreference = 'SilentlyContinue'
+        Connect-VIServer -Server vcenter1.lab.com -User "vsphere.local\administrator" -Password xxxx
+        Function ClearELog {
+          Param(
+            [parameter(Mandatory=$true, ValueFromPipeline=$true)]$VMHosts
+          )
+          process {
+            foreach($VMHost in $VMHosts){
+              $VMhostView = Get-View -VIObject $VMHost
+              Write-Host "Clearing System Event Log Of: $VMHost"
+              $VMhostHealthView = Get-View -Id $VMhostView.ConfigManager.HealthStatusSystem
+              $VMhostHealthView.ClearSystemEventLog()
+            }
+          }
+         }
+        Get-VMhost | ClearELog
+        Disconnect-VIServer -Confirm:$false
+      register: clear_log
+
+    - name: Display clear logs
+      ansible.builtin.debug:
+        var: clear_log.stdout
